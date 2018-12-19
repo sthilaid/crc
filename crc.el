@@ -17,12 +17,43 @@
 
 ;; (setq test (seq-reverse (seq-reduce (lambda (acc i) (cons (format "0x%X\n" i) acc)) (crc-make-table) '())))
 
+(defun crc-current-string (&rest delimiter-list-arg)
+  (let* ((delimiter-list (if (not delimiter-list-arg) (list ?\") delimiter-list-arg))
+         (current-point (point)))
+    (save-excursion
+      (beginning-of-buffer)
+      (cl-loop with str-start = nil
+               with str-char = nil
+               with str-end = nil
+               with prev-escape? = nil
+               for i from (point-min) to (point-max)
+               do (let ((c (char-after i)))
+                    (let ((is-str-char? (and (not prev-escape?)
+                                             (memq c delimiter-list))))
+                      (if is-str-char?
+                          (if str-start
+                              (if (eq c str-char)
+                                  (if (and (>= current-point str-start)
+                                           (<= current-point i))
+                                      (setq str-end i)
+                                    (progn (setq str-start nil)
+                                           (setq str-char nil))))
+                            (progn (setq str-start i)
+                                   (setq str-char c)
+                                   (message (concat "str starting at " (number-to-string i) " with char " (string c)))))))
+                    (setq prev-escape? (and (eq c ?\\)
+                                            (not prev-escape?))))
+               if str-end return (buffer-substring-no-properties (+ str-start 1) str-end)))))
 
-(defun crc (str &optional case-insensitive?)
+;; " test  est \"hello\" asdasdfdasfasdf?fsdf"
+
+(defun crc (str &optional case-sensitive?)
   "Calculate crc of provided string"
-  (interactive (list (read-string "crc string: ")
-                     (y-or-n-p "case insensitive?")))
-  (let* ((fixed-string (if case-insensitive? (downcase str) str))
+  (interactive (list (let* ((default-str (crc-current-string))
+                            (input-str (read-string (concat "crc string(default: \"" default-str "\"):"))))
+                       (if (string= input-str "") default-str input-str))
+                     (y-or-n-p "case sensitive?")))
+  (let* ((fixed-string (if case-sensitive? str (downcase str)))
          (crc-value (logxor (seq-reduce (lambda (crc32 i) (let ((lookup (logand (logxor crc32 i) #xFF)))
                                                             (logxor (lsh crc32 -8) (elt crc-table lookup))))
                                         (string-to-list fixed-string)
@@ -30,8 +61,7 @@
                             #xFFFFFFFF))
          (crc-str (format "0x%X" crc-value)))
     (kill-new crc-str)
-    (message (concat crc-str " [copied to killring]"))))
+    (message (concat crc-str " is the crc of \""str "\" [copied to killring]"))))
 
 (setq crc-table (crc-make-table))
 (provide 'crc)
-
