@@ -10,8 +10,8 @@
              do (let ((c n))
                   (cl-loop for k from 0 to 7
                            do (if (not (= (logand c #x1) 0))
-                                  (setq c (logxor #xedb88320 (lsh c -1)))
-                                (setq c (lsh c -1))))
+                                  (setq c (logxor #xedb88320 (ash c -1)))
+                                (setq c (ash c -1))))
                   (aset table n c)))
     table))
 
@@ -21,7 +21,7 @@
   (let* ((delimiter-list (if (not delimiter-list-arg) (list ?\") delimiter-list-arg))
          (current-point (point)))
     (save-excursion
-      (beginning-of-buffer)
+      (goto-char (point-min))
       (cl-loop with str-start = nil
                with str-char = nil
                with str-end = nil
@@ -45,17 +45,19 @@
                                             (not prev-escape?))))
                if str-end return (buffer-substring-no-properties (+ str-start 1) str-end)))))
 
-;; " test  est \"hello\" asdasdfdasfasdf?fsdf"
+;; " test  est \"Hello\" asdasdfdasfasdf?fsdf"
 
 (defun crc (str &optional case-sensitive?)
   "Calculate crc of provided string"
-  (interactive (list (let* ((default-str (crc-current-string))
+  (interactive (list (let* ((default-str (if (region-active-p)
+                                             (buffer-substring-no-properties (region-beginning) (region-end))
+                                             (crc-current-string)))
                             (input-str (read-string (concat "crc string(default: \"" default-str "\"):"))))
                        (if (string= input-str "") default-str input-str))
                      (y-or-n-p "case sensitive?")))
   (let* ((fixed-string (if case-sensitive? str (downcase str)))
          (crc-value (logxor (seq-reduce (lambda (crc32 i) (let ((lookup (logand (logxor crc32 i) #xFF)))
-                                                            (logxor (lsh crc32 -8) (elt crc-table lookup))))
+                                                            (logxor (ash crc32 -8) (elt crc-table lookup))))
                                         (string-to-list fixed-string)
                                         #xFFFFFFFF)
                             #xFFFFFFFF))
